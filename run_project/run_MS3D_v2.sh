@@ -48,6 +48,7 @@ check_path "$SOURCE_DIR" "dir"
 check_path "$MODEL_CFG_FILE" "file" "true"
 check_path "$DATASET_CFG_FILE" "file" "true"
 check_path "$MS3D_CFG_FILE" "file" "true"
+mkdir -p "$RESULT_PATH"
 check_path "$RESULT_PATH" "dir" "true"
 
 # 尋找點雲資料夾
