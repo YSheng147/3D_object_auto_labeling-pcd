@@ -5,7 +5,7 @@ SOURCE_DIR="$1"
 
 # 用絕對路徑
 # 推論使用組合設定檔
-MODEL_CFG_FILE="/home/ys/MS3D/data/custom/model_config.csv"
+MODEL_CFG_FILE="/home/ys/MS3D/run_project/model_config.csv"
 # 資料集設定檔
 DATASET_CFG_FILE="/home/ys/MS3D/tools/cfgs/dataset_configs/custom_dataset_da.yaml"
 # 融合設定檔
@@ -51,6 +51,8 @@ check_path "$MS3D_CFG_FILE" "file" "true"
 mkdir -p "$RESULT_PATH"
 check_path "$RESULT_PATH" "dir" "true"
 
+mkdir -p "$RESULT_PATH/cfgs"
+
 # 尋找點雲資料夾
 find "$SOURCE_DIR" -type d -iname "*vls128*pcd*" | while read -r found_path; do
     echo "找到：$found_path"
@@ -76,7 +78,7 @@ find "$SOURCE_DIR" -type d -iname "*vls128*pcd*" | while read -r found_path; do
     > ${model_list_cfg_file}
     mkdir -p "$result_dir"
 
-    pushd "../../tools"
+    pushd "../tools"
     # 模型推論
     while IFS=',' read -r model_cfg model_pt veh ped cyc sweeps tta 
     do
@@ -92,8 +94,8 @@ find "$SOURCE_DIR" -type d -iname "*vls128*pcd*" | while read -r found_path; do
                         --target_dataset custom --sweeps ${sweeps} --batch_size 8 --use_tta ${tta} \
                         --set DATA_CONFIG_TAR.DATA_SPLIT.test train MODEL.POST_PROCESSING.EVAL_METRIC none \
                         2>&1 | grep "Predictions saved to" | awk '{print $7}')
-        
         echo "${result_path},${veh},${ped},${cyc}" >> ${model_list_cfg_file}
+        echo "\tResult：${result_path}\t"
         echo "#DONE#"
     done < <(tail -n +2 "$MODEL_CFG_FILE")
 

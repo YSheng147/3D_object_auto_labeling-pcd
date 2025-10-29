@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Modify these paths and GPU ids
-DATA_PATH="/data/real"
+DATA_PATH="/data"
 CODE_PATH=".."
 GPU_ID="0"
 
@@ -10,7 +10,7 @@ ENVS="  --env=NVIDIA_VISIBLE_DEVICES=$GPU_ID
         --env=NVIDIA_DRIVER_CAPABILITIES=all
         --env=NVIDIA_DISABLE_REQUIRE=1"
 
-VOLUMES="       --volume=$DATA_PATH:/MS3D/dataset"
+VOLUMES="       --volume=$DATA_PATH:/MS3D/data"
 
 # Setup environmetns for pop-up visualization of point cloud (open3d)
 VISUAL="        --env=DISPLAY

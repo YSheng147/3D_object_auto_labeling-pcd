@@ -85,8 +85,8 @@ if __name__ == '__main__':
     ms3d_utils.save_data(final_ps_dict_conv, str(Path(ms3d_configs["SAVE_DIR"])), name="final_ps_dict_conv.pkl")
     print('Finished converting pseudo-labels')
     
-    gt_data = get_box_name(dataset)
-    iou_cal(cfg, gt_data, final_ps_dict_conv)
+    #gt_data = get_box_name(dataset)
+    #iou_cal(cfg, gt_data, final_ps_dict_conv)
 
-    pkl_iou_cal(cfg, gt_data, ms3d_configs['DETS_TXT'])
+    #pkl_iou_cal(cfg, gt_data, ms3d_configs['DETS_TXT'])
     
