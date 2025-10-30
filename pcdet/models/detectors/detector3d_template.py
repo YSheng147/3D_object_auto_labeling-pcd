@@ -9,6 +9,7 @@ from .. import backbones_2d, backbones_3d, dense_heads, roi_heads
 from ..backbones_2d import map_to_bev
 from ..backbones_3d import pfe, vfe
 from ..model_utils import model_nms_utils
+import inspect
 
 
 class Detector3DTemplate(nn.Module):
@@ -365,7 +366,7 @@ class Detector3DTemplate(nn.Module):
 
         logger.info('==> Loading parameters from checkpoint %s to %s' % (filename, 'CPU' if to_cpu else 'GPU'))
         loc_type = torch.device('cpu') if to_cpu else None
-        checkpoint = torch.load(filename, map_location=loc_type, weights_only=False)
+        checkpoint = self.load_checkpoint(filename, loc_type) #torch.load(filename, map_location=loc_type, weights_only=False)
         model_state_disk = checkpoint['model_state']
         if not pre_trained_path is None:
             pretrain_checkpoint = torch.load(pre_trained_path, map_location=loc_type)
@@ -414,3 +415,15 @@ class Detector3DTemplate(nn.Module):
         logger.info('==> Done')
 
         return it, epoch
+
+    def load_checkpoint(self, filename, map_location=None):
+        """
+        通用型 torch.load，兼容有無 weights_only 的 PyTorch 版本。
+        """
+        sig = inspect.signature(torch.load)
+        if "weights_only" in sig.parameters:
+            # PyTorch 2.4+ 支援 weights_only
+            return torch.load(filename, map_location=map_location, weights_only=False)
+        else:
+            # 舊版 PyTorch 不支援
+            return torch.load(filename, map_location=map_location)
