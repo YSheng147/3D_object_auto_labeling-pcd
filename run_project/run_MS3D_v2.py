@@ -21,7 +21,7 @@ BASE_PATH = SCRIPT_DIR.parent
 MODEL_CFG_FILE = BASE_PATH / "run_project/all_model_config.csv"
 DATASET_CFG_FILE = BASE_PATH / "tools/cfgs/dataset_configs/custom_dataset_da.yaml"
 MS3D_CFG_FILE = BASE_PATH / "tools/cfgs/target_custom/label_generation/round1/cfgs/ps_config.yaml"
-RESULT_PATH = BASE_PATH / "tools/cfgs/target_custom/label_generation/round1/auto"
+MODEL_RESULT_PATH = BASE_PATH / "tools/cfgs/target_custom/label_generation/round1/auto"
 TOOLS_DIR = BASE_PATH / "tools"
 OUTPUT_DIR = BASE_PATH / "output"
 MS3D_SCRIPT_PATH = TOOLS_DIR / "cfgs/target_custom/label_generation/round1/scripts/run_ms3d.sh"
@@ -36,13 +36,19 @@ def parse_arguments():
     """
     parser = argparse.ArgumentParser(
         description="處理 3D 點雲資料並執行模型推論",
-        usage=f"python {Path(__file__).name} /path/to/source_dir [--force-data] [--force-inference]"
+        usage=f"python {Path(__file__).name} --source_dir /path/to/source_dir [--force-data] [--force-inference]"
     )
     parser.add_argument(
         "--source_dir",
         type=str,
-        
+        required=True,
         help="包含點雲的來源資料夾。ex: /home/ys/MS3D/data/custom/2024-07-03/highway_cloudy_day"
+    )
+    parser.add_argument(
+        "--result_dir",
+        type=str,
+        required=True,
+        help="輸出pkl檔的資料夾"
     )
     parser.add_argument(
         "--force-data",
@@ -199,9 +205,9 @@ def main():
     check_path(DATASET_CFG_FILE, "file", check_write=True)
     check_path(MS3D_CFG_FILE, "file", check_write=True)
 
-    RESULT_PATH.mkdir(parents=True, exist_ok=True)
-    check_path(RESULT_PATH, "dir", check_write=True)
-    (RESULT_PATH / "cfgs").mkdir(parents=True, exist_ok=True)
+    MODEL_RESULT_PATH.mkdir(parents=True, exist_ok=True)
+    check_path(MODEL_RESULT_PATH, "dir", check_write=True)
+    (MODEL_RESULT_PATH / "cfgs").mkdir(parents=True, exist_ok=True)
 
     # 找點雲資料夾
     print(f"在 {source_dir} 中掃描場景中...")
@@ -254,13 +260,13 @@ def main():
 
         # dataset name
         dataset_name = f"{source_dir.name}-{scene_dir.name}"
-        model_list_cfg_file = RESULT_PATH / "cfgs" / f"ensemble_detections_{dataset_name}.txt"
-        result_dir = RESULT_PATH / "results" / f"ensemble_detections_{dataset_name}"
+        model_list_cfg_file = MODEL_RESULT_PATH / "cfgs" / f"ensemble_detections_{dataset_name}.txt"
+        model_result_dir = MODEL_RESULT_PATH / "results" / f"ensemble_detections_{dataset_name}"
         print(f"\tDataset Name：{dataset_name}")
 
         # 創建資料夾、檔案
         model_list_cfg_file.write_text("")
-        result_dir.mkdir(parents=True, exist_ok=True)
+        model_result_dir.mkdir(parents=True, exist_ok=True)
 
         # 模型推論
         try:
@@ -325,15 +331,15 @@ def main():
         modify_config_file(
             MS3D_CFG_FILE,
             "SAVE_DIR",
-            str(result_dir)
+            str(model_result_dir)
         )
 
         run_command(["bash", MS3D_SCRIPT_PATH], cwd=TOOLS_DIR)
 
         # 複製結果
         try:
-            final_pkl = result_dir / "final_ps_dict_conv.pkl"
-            target_pkl = scene_dir / "3d_label.pkl"
+            final_pkl = model_result_dir / "final_ps_dict_conv.pkl"
+            target_pkl = args.result_dir / "3d_label.pkl"
             check_path(final_pkl, "file")
             final_pkl.rename(target_pkl)
             print(f"\t結果已移動到：{target_pkl}")
