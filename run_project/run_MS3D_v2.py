@@ -7,6 +7,7 @@ import csv
 from pathlib import Path
 import ruamel.yaml
 import argparse
+import shutil
 
 # -------------------------------
 # 設定
@@ -341,7 +342,7 @@ def main():
             final_pkl = model_result_dir / "final_ps_dict_conv.pkl"
             target_pkl = args.result_dir / "3d_label.pkl"
             check_path(final_pkl, "file")
-            final_pkl.rename(target_pkl)
+            shutil.move(final_pkl, target_pkl)
             print(f"\t結果已移動到：{target_pkl}")
         except Exception as e:
             print(f"錯誤：移動結果 pkl 失敗: {e}", file=sys.stderr)
