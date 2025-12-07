@@ -48,7 +48,6 @@ def parse_arguments():
     parser.add_argument(
         "--result_dir",
         type=str,
-        required=True,
         help="輸出pkl檔的資料夾"
     )
     parser.add_argument(
@@ -60,6 +59,12 @@ def parse_arguments():
         "--force-inference",
         action="store_true",
         help="強制重新執行模型推論"
+    )
+    parser.add_argument(
+        "--extra_tag",
+        type=str,
+        default="custom",
+        help="Extra tag for dataset name"
     )
     args = parser.parse_args()
     return args
@@ -260,7 +265,7 @@ def main():
         )
 
         # dataset name
-        dataset_name = f"{source_dir.name}-{scene_dir.name}"
+        dataset_name = f"{args.extra_tag}-{scene_dir.name}"
         model_list_cfg_file = MODEL_RESULT_PATH / "cfgs" / f"ensemble_detections_{dataset_name}.txt"
         model_result_dir = MODEL_RESULT_PATH / "results" / f"ensemble_detections_{dataset_name}"
         print(f"\tDataset Name：{dataset_name}")
@@ -279,7 +284,6 @@ def main():
                     model_name = Path(model_pt).stem
                     expected_path = build_expected_path(model_cfg, model_pt, dataset_name, sweeps, tta)
                     result_path = ""
-                    print(expected_path.is_file())
                     if not args.force_inference and expected_path.is_file():
                         print(f"\t{j+1}/{total_models}\tFound (Skipping)：{model_name}\tSweeps：{sweeps}\tTTA：{tta}\t", end="", flush=True)
                         result_path = str(expected_path)
@@ -340,7 +344,10 @@ def main():
         # 複製結果
         try:
             final_pkl = model_result_dir / "final_ps_dict_conv.pkl"
-            target_pkl = args.result_dir / "3d_label.pkl"
+            if args.result_dir:
+                target_pkl = Path(args.result_dir) / "3d_label.pkl"
+            else:
+                target_pkl = scene_dir / "3d_label.pkl"
             check_path(final_pkl, "file")
             shutil.move(final_pkl, target_pkl)
             print(f"\t結果已移動到：{target_pkl}")

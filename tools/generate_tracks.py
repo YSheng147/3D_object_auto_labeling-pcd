@@ -48,8 +48,11 @@ if __name__ == '__main__':
     elif args.cls_id == 2:
         trk_cfg = tracker_utils.prepare_track_cfg(ms3d_configs['TRACKING']['PEDESTRIAN'])
         save_fname = f"tracks_world_ped.pkl"
+    elif args.cls_id == 3:
+        trk_cfg = tracker_utils.prepare_track_cfg(ms3d_configs['TRACKING']['CYCLIST'])
+        save_fname = f"tracks_world_cyc.pkl"
     else:
-        print('Only support 2 classes at the moment (1: vehicle, 2: pedestrian)')
+        print('Only support 1: vehicle, 2: pedestrian, 3: cyclist')
         raise NotImplementedError    
     
     save_fname = args.save_name if args.save_name is not None else save_fname

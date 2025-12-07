@@ -34,3 +34,4 @@ demo_data
 ps_labels
 !requirements.txt
 tools/cfgs/dataset_configs/custom_dataset_da.yaml
+GEMINI.md

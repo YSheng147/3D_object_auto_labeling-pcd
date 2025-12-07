@@ -51,6 +51,9 @@ if __name__ == '__main__':
     tracks_veh_all = ms3d_utils.load_pkl(tracks_veh_all_pth)
     tracks_veh_static = ms3d_utils.load_pkl(tracks_veh_static_pth)
     tracks_ped = ms3d_utils.load_pkl(tracks_ped_pth)
+    # cyclist
+    tracks_cyc_pth = Path(ms3d_configs["SAVE_DIR"]) / f'tracks_world_cyc.pkl'
+    tracks_cyc = ms3d_utils.load_pkl(tracks_cyc_pth)
 
     # Get vehicle labels
     print('Refining vehicle labels')
@@ -68,11 +71,22 @@ if __name__ == '__main__':
                                               ped_pos_th=ms3d_configs['PS_SCORE_TH']['POS_TH'][1],
                                               track_filtering_cfg=ms3d_configs['TEMPORAL_REFINEMENT']['TRACK_FILTERING'])
 
+    # Get cyclist labels
+    print('Refining cyclist labels')
+    tracks_cyc = ms3d_utils.refine_ped_labels(tracks_cyc, 
+                                              ped_pos_th=ms3d_configs['PS_SCORE_TH']['POS_TH'][2],
+                                              track_filtering_cfg=ms3d_configs['TEMPORAL_REFINEMENT']['TRACK_FILTERING'])
+
     # Combine pseudo-labels for each class and filter with NMS
     print('Combining pseudo-labels for each class')
-    final_ps_dict = ms3d_utils.update_ps(dataset, ps_dict, tracks_veh_all, tracks_veh_static, tracks_ped, 
+    # final_ps_dict = ms3d_utils.update_ps(dataset, ps_dict, tracks_veh_all, tracks_veh_static, tracks_ped, 
+    #           veh_pos_th=ms3d_configs['PS_SCORE_TH']['POS_TH'][0], 
+    #           veh_nms_th=0.05, ped_nms_th=0.5,
+    #           frame2box_key_static='frameid_to_propboxes', 
+    #           frame2box_key='frameid_to_box', frame_ids=list(ps_dict.keys()))
+    final_ps_dict = ms3d_utils.update_ps(dataset, ps_dict, tracks_veh_all, tracks_veh_static, tracks_ped, tracks_cyc,
               veh_pos_th=ms3d_configs['PS_SCORE_TH']['POS_TH'][0], 
-              veh_nms_th=0.05, ped_nms_th=0.5, 
+              veh_nms_th=0.05, ped_nms_th=0.5, cyc_nms_th=0.5,
               frame2box_key_static='frameid_to_propboxes', 
               frame2box_key='frameid_to_box', frame_ids=list(ps_dict.keys()))
 

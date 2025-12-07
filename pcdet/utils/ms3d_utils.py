@@ -20,8 +20,8 @@ from pcdet.datasets.augmentor.augmentor_utils import get_points_in_box
 
 # ======== Temporal and final label refinement key functions ========
 
-def update_ps(dataset, ps_dict, tracks_veh_all, tracks_veh_static, tracks_ped=None, 
-              veh_pos_th=0.6, veh_nms_th=0.05, ped_nms_th=0.5, min_num_pts=1,
+def update_ps(dataset, ps_dict, tracks_veh_all, tracks_veh_static, tracks_ped=None, tracks_cyc=None,
+              veh_pos_th=0.6, veh_nms_th=0.05, ped_nms_th=0.5, cyc_nms_th=0.5, min_num_pts=1,
               frame2box_key_static='frameid_to_propboxes', frame2box_key='frameid_to_box', frame_ids=None):
     """
     Add everything to the frame and use NMS to filter out by score. 
@@ -89,6 +89,27 @@ def update_ps(dataset, ps_dict, tracks_veh_all, tracks_veh_static, tracks_ped=No
             new_boxes = np.vstack([new_veh_boxes, new_ped_boxes])        
         else:
             new_boxes = new_veh_boxes
+
+        ## ----- Cyclist -----
+        if tracks_cyc is not None:
+            cyc_mask = abs(cur_gt_boxes[:,7]) == 3
+            cur_cyc_boxes = cur_gt_boxes[cyc_mask]            
+            
+            if cur_cyc_boxes.shape[0] != 0:
+                track_boxes_cyc = get_frame_track_boxes(tracks_cyc, frame_id) # (N,9): [x,y,z,dx,dy,dz,heading,score,trk_id]
+                pose = get_pose(dataset, frame_id)
+                _, ego_track_boxes_cyc = world_to_ego(pose, boxes=track_boxes_cyc)
+                ego_track_boxes_cyc = np.insert(ego_track_boxes_cyc[:,:8], 7, axis=1, values=3) # (N,9): [x,y,z,dx,dy,dz,heading,cls_id,score] ; cyc class_id = 3        
+                new_cyc_boxes = np.vstack([cur_cyc_boxes, ego_track_boxes_cyc])        
+                if new_cyc_boxes.shape[0] > 1:            
+                    nms_mask = nms(new_cyc_boxes[:,:7].astype(np.float32), 
+                                    new_cyc_boxes[:,8].astype(np.float32),
+                                    thresh=cyc_nms_th)
+                    new_cyc_boxes = new_cyc_boxes[nms_mask]
+            else:
+                new_cyc_boxes = np.empty((0,9))
+
+            new_boxes = np.vstack([new_boxes, new_cyc_boxes])
 
         # Only keep if more than 1 pt in the box - officially, the evaluation counts the num pts in the box for 1 lidar sweep
         points_1frame = get_lidar(dataset, frame_id) # 1 sweep lidar
@@ -203,7 +224,7 @@ def select_ps_by_th(ps_dict, pos_th):
                                 ps_dict[frame_id]['gt_boxes'][:,8] < pos_th[1])
         ps_dict[frame_id]['gt_boxes'][:,7][ped_mask] = -abs(ps_dict[frame_id]['gt_boxes'][:,7][ped_mask])
 
-        cyc_mask = np.logical_and(abs(ps_dict[frame_id]['gt_boxes'][:,7]) == 2, 
+        cyc_mask = np.logical_and(abs(ps_dict[frame_id]['gt_boxes'][:,7]) == 3, 
                                 ps_dict[frame_id]['gt_boxes'][:,8] < pos_th[2])
         ps_dict[frame_id]['gt_boxes'][:,7][cyc_mask] = -abs(ps_dict[frame_id]['gt_boxes'][:,7][cyc_mask])
 
