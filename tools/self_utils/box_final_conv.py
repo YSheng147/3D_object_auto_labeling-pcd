@@ -91,26 +91,56 @@ def convert_data_format(dataset_name, dataset, data_dict: dict) -> list:
 
 def iou_cal(cfg, gt_anno, dt_anno):
     gt_data = copy.deepcopy(gt_anno)
-    dt_data = score_filter(dt_anno, 0.7)
+    
+    # 定義類別特定的分數閾值
+    score_thresholds = {
+        'Vehicle': 0.5,      # Vehicle 使用較高閾值
+        'Pedestrian': 0.3,   # Pedestrian 使用中等閾值
+        'Cyclist': 0.3       # Cyclist 使用較低閾值
+    }
+    
+    # 使用類別特定閾值進行過濾
+    dt_data = score_filter(dt_anno, score_threshold=0.5, class_thresholds=score_thresholds)
     
     iou_thresholds = {
-        'Vehicle': 0.7,
-        'Pedestrian': 0.5,
-        'Cyclist': 0.5
+        'Vehicle': 0.5,
+        'Pedestrian': 0.3,
+        'Cyclist': 0.3
     }
     point_cloud_range = np.array(cfg.POINT_CLOUD_RANGE, dtype=np.float32)
 
     calculate_recall_for_dataset(gt_data, dt_data, iou_thresholds, point_cloud_range)
 
-def score_filter(data, score_threshold = 0.7):
+def score_filter(data, score_threshold=0.5, class_thresholds=None):
+    """
+    根據分數篩選偵測結果，支援類別特定的閾值
+    
+    Args:
+        data: 偵測結果列表
+        score_threshold: 預設閾值（當 class_thresholds 未指定時使用）
+        class_thresholds: 類別特定閾值字典，例如 {'Vehicle': 0.7, 'Pedestrian': 0.5, 'Cyclist': 0.5}
+    """
     # 準備一個新的 list 來存放篩選後的結果
     filtered_results = []
 
     # 歷遍每一幀的資料
     for frame_data in data:
         scores = frame_data['score']
-        high_score_mask = scores > score_threshold
-        # 如果沒有任何一個分數 > 0.7，可以選擇跳過此幀
+        names = frame_data['name']
+        
+        # 根據類別創建篩選遮罩
+        if class_thresholds is not None:
+            # 為每個偵測創建遮罩
+            high_score_mask = np.zeros(len(scores), dtype=bool)
+            for i, (score, name) in enumerate(zip(scores, names)):
+                # 獲取該類別的閾值，如果未定義則使用預設值
+                threshold = class_thresholds.get(name, score_threshold)
+                high_score_mask[i] = score > threshold
+        else:
+            # 使用統一閾值
+            high_score_mask = scores > score_threshold
+            
+        # 如果沒有任何一個偵測通過閾值，跳過此幀
         if not np.any(high_score_mask):
             continue
             

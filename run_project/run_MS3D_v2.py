@@ -14,12 +14,15 @@ import shutil
 # -------------------------------
 # ex: /home/ys/MS3D/data/custom/2024-07-03/highway_cloudy_day
 
+RESULT_NAME = "3d_label_v2.pkl"
+
 SCRIPT_FILE_PATH = Path(__file__).resolve()
 SCRIPT_DIR = SCRIPT_FILE_PATH.parent
 # 專案目錄
 BASE_PATH = SCRIPT_DIR.parent
 
 MODEL_CFG_FILE = BASE_PATH / "run_project/all_model_config.csv"
+#MODEL_CFG_FILE = BASE_PATH / "run_project/model_config_1frame.csv"
 DATASET_CFG_FILE = BASE_PATH / "tools/cfgs/dataset_configs/custom_dataset_da.yaml"
 MS3D_CFG_FILE = BASE_PATH / "tools/cfgs/target_custom/label_generation/round1/cfgs/ps_config.yaml"
 MODEL_RESULT_PATH = BASE_PATH / "tools/cfgs/target_custom/label_generation/round1/auto"
@@ -59,6 +62,11 @@ def parse_arguments():
         "--force-inference",
         action="store_true",
         help="強制重新執行模型推論"
+    )
+    parser.add_argument(
+        "--force-fusion",
+        action="store_true",
+        help="強制重新融合結果"
     )
     parser.add_argument(
         "--extra_tag",
@@ -193,7 +201,6 @@ def build_expected_path(model_cfg_path: str,model_pt_path: str, dataset_name: st
     file_name = "result.pkl"
 
     expected_path = OUTPUT_DIR / cfg_part / magic_part / eval_tag_part / file_name
-    
     return expected_path
 
 # -------------------------------
@@ -247,6 +254,17 @@ def main():
     # 開始處理
     for i, found_path in enumerate(found_paths):
         scene_dir = found_path.parent
+        
+        if args.result_dir:
+            target_pkl = Path(args.result_dir) / RESULT_NAME 
+        else:
+            target_pkl = scene_dir / RESULT_NAME
+
+        # 檢查是否跳過
+        if not args.force_fusion and target_pkl.is_file():
+            print(f"跳過場景 [{i + 1}/{total_scenes}]: {scene_dir.name} (結果已存在於 {target_pkl})")
+            continue
+
         print(f"開始處理場景 [{i + 1}/{total_scenes}]: {scene_dir.name}")
 
         # 處理資料
@@ -282,7 +300,7 @@ def main():
                     if not row: continue
                     model_cfg, model_pt, veh, ped, cyc, sweeps, tta = row
                     model_name = Path(model_pt).stem
-                    expected_path = build_expected_path(model_cfg, model_pt, dataset_name, sweeps, tta)
+                    expected_path = build_expected_path(model_cfg, model_pt, dataset_name , sweeps, tta) # dataset_name + f"_{model_name}"
                     result_path = ""
                     if not args.force_inference and expected_path.is_file():
                         print(f"\t{j+1}/{total_models}\tFound (Skipping)：{model_name}\tSweeps：{sweeps}\tTTA：{tta}\t", end="", flush=True)
@@ -344,10 +362,6 @@ def main():
         # 複製結果
         try:
             final_pkl = model_result_dir / "final_ps_dict_conv.pkl"
-            if args.result_dir:
-                target_pkl = Path(args.result_dir) / "3d_label.pkl"
-            else:
-                target_pkl = scene_dir / "3d_label.pkl"
             check_path(final_pkl, "file")
             shutil.move(final_pkl, target_pkl)
             print(f"\t結果已移動到：{target_pkl}")

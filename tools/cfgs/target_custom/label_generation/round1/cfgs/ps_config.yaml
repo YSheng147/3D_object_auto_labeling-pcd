@@ -1,5 +1,5 @@
-DETS_TXT: '/home/ys/MS3D/tools/cfgs/target_custom/label_generation/round1/auto/cfgs/ensemble_detections_custom-zod.txt'
-SAVE_DIR: '/home/ys/MS3D/tools/cfgs/target_custom/label_generation/round1/auto/results/ensemble_detections_custom-zod'
+DETS_TXT: '/home/ys/MS3D/tools/cfgs/target_custom/label_generation/round1/auto/cfgs/ensemble_detections_nuscense.txt'
+SAVE_DIR: '/home/ys/MS3D/tools/cfgs/target_custom/label_generation/round1/auto/results/ensemble_detections_nuscense'
 DATA_CONFIG_PATH: ./cfgs/dataset_configs/custom_dataset_da.yaml
 
 PS_SCORE_TH: # veh,ped,cyc
@@ -7,7 +7,7 @@ PS_SCORE_TH: # veh,ped,cyc
   NEG_TH: [0.3, 0.3, 0.3]
 
 ENSEMBLE_KBF:
-  DISCARD: [10, 5, 5]
+  DISCARD: [5, 3, 3]
   RADIUS: [1.5, 0.3, 0.5]
   NMS: [0.1, 0.3, 0.3]
 
