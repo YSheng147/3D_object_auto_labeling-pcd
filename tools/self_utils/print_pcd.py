@@ -2,7 +2,7 @@ import open3d as o3d
 import numpy as np
 import torch
 
-pcd = o3d.io.read_point_cloud("/home/ys/MS3D/data/custom/colored_pcd_img1/000000.pcd")
+pcd = o3d.io.read_point_cloud("./output_000000.pcd")
 print(torch.__version__)
 print(o3d.__version__)
 print(pcd)  # 會顯示點雲資料概要
