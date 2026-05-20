@@ -22,11 +22,11 @@ VIEW_CENTER_TARGET = np.array([0.0, 5.0, -10.0])
 # 設定 3D 視窗中攝影機的「上方」向量
 VIEW_UP_VECTOR = np.array([0.0, 1.0, 0.0])
 
-
 # zod
 # VIEW_EYE_POSITION = np.array([0.0, 5.0, 20.0])
 # VIEW_CENTER_TARGET = np.array([10.0, 0.0, 20.0])
 # VIEW_UP_VECTOR = np.array([0.0, 1.0, 0.1])
+
 # ==============================================================================
 # 核心幾何運算函式 (Core Geometry Functions)
 # ==============================================================================
@@ -389,45 +389,69 @@ def render_video_sequence(state, output_filename, framerate):
 # 2D 顯示
 # ==============================================================================
 
-def draw_projection_on_image(image, points_2d, corners_2d):
+def draw_projection_on_image(image, points_2d, corners_2d, show_points=True, box_mode='3d'):
     """
     2D 影像上面繪製投影點雲和框
 
     Args:
-        image : 
+        image : 輸入影像
         points_2d : 2D 投影點
-        corners_2d : 2D 投影框的角點
+        corners_2d : 2D 投影框的角點 (N, 8, 2)
+        show_points : 是否顯示點雲，預設 True
+        box_mode : 框的繪製模式
+            - '3d': 只畫 3D 框（8個角點的完整立方體）
+            - '2d': 只畫 2D 框（8個角點的外接矩形）
+            - 'both': 同時畫 3D 和 2D 框
+            - 'none': 不畫框
     Returns:
         numpy.ndarray: 繪製了投影點和框的影像
     """
-    # 畫上投影後的點雲
     image_height, image_width, _ = image.shape
-    in_bounds = (points_2d[:, 0] >= 0) & (points_2d[:, 0] < image_width) & \
-                (points_2d[:, 1] >= 0) & (points_2d[:, 1] < image_height)
     
-    for point in points_2d[in_bounds].astype(np.int32):
-        cv2.circle(image, tuple(point), radius=1, color=(0, 255, 0), thickness=-1) # 綠色的點
+    # 畫上投影後的點雲
+    if show_points and len(points_2d) > 0:
+        in_bounds = (points_2d[:, 0] >= 0) & (points_2d[:, 0] < image_width) & \
+                    (points_2d[:, 1] >= 0) & (points_2d[:, 1] < image_height)
+        
+        for point in points_2d[in_bounds].astype(np.int32):
+            cv2.circle(image, tuple(point), radius=1, color=(0, 255, 0), thickness=-1) # 綠色的點
 
-    # 畫上 3D 框的 2D 投影線條
-    edges = [
-        (0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), 
-        (6, 7), (7, 4), (0, 4), (1, 5), (2, 6), (3, 7)
-    ]
-    for box_corners in corners_2d:
-        pts = box_corners.astype(np.int32)
-        for i, j in edges:
-            cv2.line(image, tuple(pts[i]), tuple(pts[j]), color=(0, 0, 255), thickness=2) # 紅色的框
+    # 畫上框
+    if box_mode != 'none' and len(corners_2d) > 0:
+        # 3D 框的邊（完整立方體的 12 條邊）
+        edges_3d = [
+            (0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), 
+            (6, 7), (7, 4), (0, 4), (1, 5), (2, 6), (3, 7)
+        ]
+        
+        for box_corners in corners_2d:
+            pts = box_corners.astype(np.int32)
+            
+            # 畫 3D 框
+            if box_mode in ['3d', 'both']:
+                for i, j in edges_3d:
+                    cv2.line(image, tuple(pts[i]), tuple(pts[j]), color=(0, 0, 255), thickness=2) # 紅色的 3D 框
+            
+            # 畫 2D 外接矩形框
+            if box_mode in ['2d', 'both']:
+                x_coords = pts[:, 0]
+                y_coords = pts[:, 1]
+                x_min, x_max = np.min(x_coords), np.max(x_coords)
+                y_min, y_max = np.min(y_coords), np.max(y_coords)
+                cv2.rectangle(image, (x_min, y_min), (x_max, y_max), color=(255, 0, 0), thickness=2) # 藍色的 2D 框
 
     return image
 
-def render_2d_video_sequence(state, output_filename, framerate):
+def render_2d_video_sequence(state, output_filename, framerate, show_points=True, box_mode='3d'):
     """
     渲染 2D 影片
 
     Args:
-        state :
+        state : 應用程式狀態
         output_filename : 輸出檔名，包括檔案路徑
         framerate : 目標幀率
+        show_points : 是否顯示點雲，預設 True
+        box_mode : 框的繪製模式 ('3d', '2d', 'both', 'none')，預設 '3d'
     Returns:
         None :
     """
@@ -457,8 +481,8 @@ def render_2d_video_sequence(state, output_filename, framerate):
             canvas = np.zeros((height, width, 3), dtype=np.uint8)
         # b. 去畸變
         # 計算新的、最佳化的相機內參矩陣
-        #new_camera_intrinsics, roi = cv2.getOptimalNewCameraMatrix(K, D, (width, height), 0, (width, height))
-        #undistorted_canvas = cv2.undistort(canvas, K, D, None, new_camera_intrinsics)
+        new_camera_intrinsics, roi = cv2.getOptimalNewCameraMatrix(K, D, (width, height), 0, (width, height))
+        undistorted_canvas = cv2.undistort(canvas, K, D, None, new_camera_intrinsics)
         
         # c. 執行座標轉換和投影
         points_in_camera = transform_points(np.asarray(pcd_legacy.points), state.lidar_to_camera_extrinsics)
@@ -475,7 +499,8 @@ def render_2d_video_sequence(state, output_filename, framerate):
                 projected_corners = projected_valid_corners.reshape(-1, 8, 2)
 
         # c. 在影像上繪圖並儲存
-        output_frame = draw_projection_on_image(canvas, projected_points, projected_corners)
+        output_frame = draw_projection_on_image(undistorted_canvas, projected_points, projected_corners, 
+                                                show_points=show_points, box_mode=box_mode)
         image_path = os.path.join(temp_image_folder, f"frame_{i:05d}.png")
         cv2.imwrite(image_path, output_frame)
 
@@ -559,7 +584,12 @@ if __name__ == "__main__":
     parser.add_argument("--base_folder", type=str, required=True, help="包含 VLS128_pcdnpy/, imu/, image/, 3d_label.pkl 的基礎資料夾路徑")
     parser.add_argument("--render_video", type=str, metavar="OUTPUT_FILE", help="渲染 3D 影片")
     parser.add_argument("--render_2d_video", type=str, metavar="OUTPUT_2D_FILE", help="渲染 2D 投影影片")
-    parser.add_argument("--fps", type=int, default=10, help="輸出影片的幀率")
+    parser.add_argument("--fps", type=int, default=6, help="輸出影片的幀率")
+    
+    # 2D 渲染選項
+    parser.add_argument("--show_points", action="store_true",default=False, help="在 2D 渲染中隱藏點雲 (預設會顯示)")
+    parser.add_argument("--box_mode", type=str, choices=['3d', '2d', 'both', 'none'], default='both',
+                        help="2D 渲染中框的繪製模式: 3d=3D框, 2d=2D外接矩形, both=兩者都畫, none=不畫框 (預設: 3d)")
 
     args = parser.parse_args()
 
@@ -574,7 +604,8 @@ if __name__ == "__main__":
 
     if args.render_2d_video:
         print(app_state.data_loader.image_width)
-        render_2d_video_sequence(app_state, args.render_2d_video, args.fps)
+        render_2d_video_sequence(app_state, args.render_2d_video, args.fps, 
+                                 show_points=args.show_points, box_mode=args.box_mode)
     if args.render_video:
         render_video_sequence(app_state, args.render_video, args.fps)
     #else:

@@ -15,11 +15,11 @@ import shutil
 # ex: /home/ys/MS3D/data/custom/2024-07-03/highway_cloudy_day
 
 SCRIPT_FILE_PATH = Path(__file__).resolve()
-SCRIPT_DIR = SCRIPT_FILE_PATH.parent
+SCRIPT_DIR = SCRIPT_FILE_PATH.parent          # run_project/stats/
 # 專案目錄
-BASE_PATH = SCRIPT_DIR.parent
+BASE_PATH = SCRIPT_DIR.parent.parent          # project root
 
-MODEL_CFG_FILE = BASE_PATH / "run_project/all_model_config.csv"
+MODEL_CFG_FILE = SCRIPT_DIR.parent / "cfgs/all_model_config.csv"
 DATASET_CFG_FILE = BASE_PATH / "tools/cfgs/dataset_configs/custom_dataset_da.yaml"
 MS3D_CFG_FILE = BASE_PATH / "tools/cfgs/target_custom/label_generation/round1/cfgs/ps_config.yaml"
 MODEL_RESULT_PATH = BASE_PATH / "tools/cfgs/target_custom/label_generation/round1/auto"
@@ -104,7 +104,7 @@ def main():
     for i, found_path in enumerate(found_paths):
         print(f"開始處理場景 [{i + 1}/{total_scenes}]: {found_path}")
         # 統計
-        run_command(["python", "class_statistics.py", str(found_path)])
+        run_command(["python", str(SCRIPT_DIR / "class_statistics.py"), str(found_path)])
 
     print("全部處理完畢。")
 

@@ -22,11 +22,11 @@ VIEW_CENTER_TARGET = np.array([0.0, 5.0, -10.0])
 # 設定 3D 視窗中攝影機的「上方」向量
 VIEW_UP_VECTOR = np.array([0.0, 1.0, 0.0])
 
-
 # zod
 # VIEW_EYE_POSITION = np.array([0.0, 5.0, 20.0])
 # VIEW_CENTER_TARGET = np.array([10.0, 0.0, 20.0])
 # VIEW_UP_VECTOR = np.array([0.0, 1.0, 0.1])
+
 # ==============================================================================
 # 核心幾何運算函式 (Core Geometry Functions)
 # ==============================================================================
@@ -389,45 +389,134 @@ def render_video_sequence(state, output_filename, framerate):
 # 2D 顯示
 # ==============================================================================
 
-def draw_projection_on_image(image, points_2d, corners_2d):
+def load_yolo_boxes(label_path, image_width, image_height):
     """
-    2D 影像上面繪製投影點雲和框
+    讀取 YOLO 格式標籤並轉換回像素座標
+
+    YOLO 格式: class_id center_x center_y width height (均為歸一化值 0~1)
 
     Args:
-        image : 
+        label_path (str): YOLO .txt 標籤檔路徑
+        image_width (int): 影像寬度 (像素)
+        image_height (int): 影像高度 (像素)
+    Returns:
+        list of dict: 每個 dict 包含 'class_id', 'x1', 'y1', 'x2', 'y2' (像素座標)
+    """
+    boxes = []
+    if not os.path.exists(label_path):
+        return boxes
+    with open(label_path, 'r') as f:
+        for line in f:
+            parts = line.strip().split()
+            if len(parts) < 5:
+                continue
+            class_id = int(parts[0])
+            cx = float(parts[1]) * image_width
+            cy = float(parts[2]) * image_height
+            w  = float(parts[3]) * image_width
+            h  = float(parts[4]) * image_height
+            x1 = int(cx - w / 2)
+            y1 = int(cy - h / 2)
+            x2 = int(cx + w / 2)
+            y2 = int(cy + h / 2)
+            boxes.append({'class_id': class_id, 'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2})
+    return boxes
+
+
+# YOLO 類別名稱對應（可依需求修改）
+YOLO_CLASS_NAMES = {
+    0: 'vehicle',
+    1: 'pedestrian',
+    2: 'cyclist',
+}
+# YOLO 類別對應顏色 (BGR)
+YOLO_CLASS_COLORS = {
+    0: (0, 165, 255),   # 橙色：車輛
+    1: (255, 0, 255),   # 洋紅色：行人
+    2: (255, 255, 0),   # 青色：騎行者
+}
+YOLO_DEFAULT_COLOR = (0, 165, 255)  # 預設橙色
+
+def draw_projection_on_image(image, points_2d, corners_2d, show_points=True, box_mode='3d', yolo_boxes=None):
+    """
+    2D 影像上面繪製投影點雲、3D/2D 框，以及 YOLO 2D 框
+
+    Args:
+        image : 輸入影像
         points_2d : 2D 投影點
-        corners_2d : 2D 投影框的角點
+        corners_2d : 2D 投影框的角點 (N, 8, 2)
+        show_points : 是否顯示點雲，預設 True
+        box_mode : 框的繪製模式
+            - '3d': 只畫 3D 框（8個角點的完整立方體）
+            - '2d': 只畫 2D 框（8個角點的外接矩形）
+            - 'both': 同時畫 3D 和 2D 框
+            - 'none': 不畫框
+        yolo_boxes : list of dict，每個 dict 包含 class_id, x1, y1, x2, y2 (像素座標)
+                     若為 None 則不繪製 YOLO 框
     Returns:
         numpy.ndarray: 繪製了投影點和框的影像
     """
-    # 畫上投影後的點雲
     image_height, image_width, _ = image.shape
-    in_bounds = (points_2d[:, 0] >= 0) & (points_2d[:, 0] < image_width) & \
-                (points_2d[:, 1] >= 0) & (points_2d[:, 1] < image_height)
     
-    for point in points_2d[in_bounds].astype(np.int32):
-        cv2.circle(image, tuple(point), radius=1, color=(0, 255, 0), thickness=-1) # 綠色的點
+    # 畫上投影後的點雲
+    if show_points and len(points_2d) > 0:
+        in_bounds = (points_2d[:, 0] >= 0) & (points_2d[:, 0] < image_width) & \
+                    (points_2d[:, 1] >= 0) & (points_2d[:, 1] < image_height)
+        
+        for point in points_2d[in_bounds].astype(np.int32):
+            cv2.circle(image, tuple(point), radius=1, color=(0, 255, 0), thickness=-1) # 綠色的點
 
-    # 畫上 3D 框的 2D 投影線條
-    edges = [
-        (0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), 
-        (6, 7), (7, 4), (0, 4), (1, 5), (2, 6), (3, 7)
-    ]
-    for box_corners in corners_2d:
-        pts = box_corners.astype(np.int32)
-        for i, j in edges:
-            cv2.line(image, tuple(pts[i]), tuple(pts[j]), color=(0, 0, 255), thickness=2) # 紅色的框
+    # 畫上框
+    if box_mode != 'none' and len(corners_2d) > 0:
+        # 3D 框的邊（完整立方體的 12 條邊）
+        edges_3d = [
+            (0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), 
+            (6, 7), (7, 4), (0, 4), (1, 5), (2, 6), (3, 7)
+        ]
+        
+        for box_corners in corners_2d:
+            pts = box_corners.astype(np.int32)
+            
+            # 畫 3D 框
+            if box_mode in ['3d', 'both']:
+                for i, j in edges_3d:
+                    cv2.line(image, tuple(pts[i]), tuple(pts[j]), color=(0, 0, 255), thickness=2) # 紅色的 3D 框
+            
+            # 畫 2D 外接矩形框
+            if box_mode in ['2d', 'both']:
+                x_coords = pts[:, 0]
+                y_coords = pts[:, 1]
+                x_min, x_max = np.min(x_coords), np.max(x_coords)
+                y_min, y_max = np.min(y_coords), np.max(y_coords)
+                cv2.rectangle(image, (x_min, y_min), (x_max, y_max), color=(255, 0, 0), thickness=2) # 藍色的 2D 框
+
+    # 畫上 YOLO 2D 框
+    if yolo_boxes:
+        for box in yolo_boxes:
+            cid = box.get('class_id', -1)
+            color = YOLO_CLASS_COLORS.get(cid, YOLO_DEFAULT_COLOR)
+            x1, y1, x2, y2 = box['x1'], box['y1'], box['x2'], box['y2']
+            cv2.rectangle(image, (x1, y1), (x2, y2), color=color, thickness=2)
+            # 顯示類別標籤
+            label = YOLO_CLASS_NAMES.get(cid, f'cls{cid}')
+            label_pos = (x1, max(y1 - 6, 0))
+            cv2.putText(image, label, label_pos,
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2, cv2.LINE_AA)
 
     return image
 
-def render_2d_video_sequence(state, output_filename, framerate):
+def render_2d_video_sequence(state, output_filename, framerate, show_points=True, box_mode='3d', yolo_label_folder=None):
     """
     渲染 2D 影片
 
     Args:
-        state :
+        state : 應用程式狀態
         output_filename : 輸出檔名，包括檔案路徑
         framerate : 目標幀率
+        show_points : 是否顯示點雲，預設 True
+        box_mode : 框的繪製模式 ('3d', '2d', 'both', 'none')，預設 '3d'
+        yolo_label_folder : YOLO 標籤資料夾路徑，若為 None 則不繪製 YOLO 框
+                            資料夾下需有與點雲同名的 .txt 標籤檔（例如 000000.txt）
     Returns:
         None :
     """
@@ -457,8 +546,8 @@ def render_2d_video_sequence(state, output_filename, framerate):
             canvas = np.zeros((height, width, 3), dtype=np.uint8)
         # b. 去畸變
         # 計算新的、最佳化的相機內參矩陣
-        #new_camera_intrinsics, roi = cv2.getOptimalNewCameraMatrix(K, D, (width, height), 0, (width, height))
-        #undistorted_canvas = cv2.undistort(canvas, K, D, None, new_camera_intrinsics)
+        new_camera_intrinsics, roi = cv2.getOptimalNewCameraMatrix(K, D, (width, height), 0, (width, height))
+        undistorted_canvas = cv2.undistort(canvas, K, D, None, new_camera_intrinsics)
         
         # c. 執行座標轉換和投影
         points_in_camera = transform_points(np.asarray(pcd_legacy.points), state.lidar_to_camera_extrinsics)
@@ -474,8 +563,20 @@ def render_2d_video_sequence(state, output_filename, framerate):
                 projected_valid_corners, _ = project_points_to_image(valid_3d_corners.reshape(-1, 3), K)
                 projected_corners = projected_valid_corners.reshape(-1, 8, 2)
 
-        # c. 在影像上繪圖並儲存
-        output_frame = draw_projection_on_image(canvas, projected_points, projected_corners)
+        # d. 讀取對應的 YOLO 2D 標籤
+        yolo_boxes = None
+        if yolo_label_folder:
+            pcd_filename = frame_data.get('pcd_filename', '')
+            # 取點雲檔名的 basename（不含副檔名）作為 YOLO 標籤檔名
+            base_name = os.path.splitext(os.path.basename(pcd_filename))[0] if pcd_filename else f"{i:06d}"
+            yolo_label_path = os.path.join(yolo_label_folder, f"{base_name}.txt")
+            cur_h, cur_w = undistorted_canvas.shape[:2]
+            yolo_boxes = load_yolo_boxes(yolo_label_path, cur_w, cur_h)
+
+        # e. 在影像上繪圖並儲存
+        output_frame = draw_projection_on_image(undistorted_canvas, projected_points, projected_corners,
+                                                show_points=show_points, box_mode=box_mode,
+                                                yolo_boxes=yolo_boxes)
         image_path = os.path.join(temp_image_folder, f"frame_{i:05d}.png")
         cv2.imwrite(image_path, output_frame)
 
@@ -559,7 +660,14 @@ if __name__ == "__main__":
     parser.add_argument("--base_folder", type=str, required=True, help="包含 VLS128_pcdnpy/, imu/, image/, 3d_label.pkl 的基礎資料夾路徑")
     parser.add_argument("--render_video", type=str, metavar="OUTPUT_FILE", help="渲染 3D 影片")
     parser.add_argument("--render_2d_video", type=str, metavar="OUTPUT_2D_FILE", help="渲染 2D 投影影片")
-    parser.add_argument("--fps", type=int, default=10, help="輸出影片的幀率")
+    parser.add_argument("--fps", type=int, default=6, help="輸出影片的幀率")
+    
+    # 2D 渲染選項
+    parser.add_argument("--show_points", action="store_true",default=False, help="在 2D 渲染中隱藏點雲 (預設會顯示)")
+    parser.add_argument("--box_mode", type=str, choices=['3d', '2d', 'both', 'none'], default='both',
+                        help="2D 渲染中框的繪製模式: 3d=3D框, 2d=2D外接矩形, both=兩者都畫, none=不畫框 (預設: 3d)")
+    parser.add_argument("--yolo_label_folder", type=str, default=None,
+                        help="YOLO 2D 標籤資料夾路徑 (每幀對應一個 .txt 檔，檔名與點雲相同)")
 
     args = parser.parse_args()
 
@@ -574,7 +682,9 @@ if __name__ == "__main__":
 
     if args.render_2d_video:
         print(app_state.data_loader.image_width)
-        render_2d_video_sequence(app_state, args.render_2d_video, args.fps)
+        render_2d_video_sequence(app_state, args.render_2d_video, args.fps, 
+                                 show_points=args.show_points, box_mode=args.box_mode,
+                                 yolo_label_folder=args.yolo_label_folder)
     if args.render_video:
         render_video_sequence(app_state, args.render_video, args.fps)
     #else:

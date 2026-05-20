@@ -51,8 +51,8 @@ class SceneDataLoader:
         self.base_folder = base_folder # 儲存基礎路徑
         self.pointcloud_folder = os.path.join(self.base_folder, "VLS128_pcd")    # 點雲 路徑
         self.imu_folder = os.path.join(self.base_folder, "imu")                     # IMU 路徑
-        self.image_folder = os.path.join(self.base_folder, "image")                 # 圖片 路徑
-        self.box3D_file = os.path.join(self.base_folder, "3d_label.pkl")          # 3D框 路徑
+        self.image_folder = os.path.join(self.base_folder, "images")                 # 圖片 路徑
+        self.box3D_file = os.path.join(self.base_folder, "3d_label_v3.pkl")          # 3D框 路徑
 
         # 可能檔名設定
         self.imu_possible_names = ["id.txt", "id_imu.txt"]
@@ -60,39 +60,74 @@ class SceneDataLoader:
 
         # --- 2. Lidar to Camera 外參、內參 ---
         # TODO：未來這部分可以改成從檔案讀取，例如 self.lidar_to_camera_extrinsics = np.loadtxt(...)
+        # G5
         # self.lidar_to_camera_extrinsics = np.array([ 
         #     [0.037,  -0.999,  0.009,  0.0],
         #     [-0.094, -0.012, -0.996, -0.3],
         #     [0.995,   0.036, -0.094, -0.43],
         #     [0.0,     0.0,    0.0,    1.0]
         # ])
-
         # self.camera_intrinsics = np.array([
         #     [1418.667,  0.0,        640.0],
         #     [0.0,       1418.667,   360.0],
         #     [0.0,       0.0,        1.0]
         # ])
 
-        self.lidar_to_camera_extrinsics = np.array([ 
-            [  0.087505, -0.996160, 0.002753, -0.771377 ],
-            [ -0.006834, -0.003364, -0.999971, 1.676000 -1.8 ],
-            [  0.996141, 0.087484, -0.007102, 1.847415 ],
-            [  0.0000000,  0.0000000,  0.0000000,  1.0000000 ]
-        ])
 
+        #G6
+        self.lidar_to_camera_extrinsics = np.array([
+            [-0.00693070, -0.99997562,  0.00083871,  0.000000],
+            [-0.12013684,  0.000000,   -0.99275732, -0.200000],
+            [ 0.99273312, -0.00698126, -0.12013391,  0.000000],
+            [ 0.0,         0.0,         0.0,         1.0     ]
+        ], dtype=np.float32)
         self.camera_intrinsics = np.array([
-            [2596.0221329790797,    0     ,  1820.868392151553,],
-            [0.000000, 2605.3715497870785,  1131.0899624075655],
-            [0.000000, 0.000000, 1.000000]
-        ])
+            [2453.4,    0.0, 1933.1],
+            [   0.0, 2466.0, 1109.8],
+            [   0.0,    0.0,    1.0]
+        ], dtype=np.float32)
+        
 
-        self.distortion_coeffs = np.array([-0.463575, 0.245606, -0.000168, -0.001956])
+        # zod_seq_000000
+        # self.lidar_to_camera_extrinsics = np.array([
+        #     [0.999655849069204, 0.025747305216993494, 0.005025902485147328, 0.01873892045261881], 
+        #     [0.0048910139999285155, 0.0052992360200112675, -0.9999739977017676, -0.6022886477936691], 
+        #     [-0.025773269171366863, 0.9996544374791049, 0.005171481852725705, -0.8559553130943762], 
+        #     [0.0, 0.0, 0.0, 1.0]
+        # ])
+        # self.camera_intrinsics = np.array([
+        #     [1882.142659676832, 0.0, 1954.268438554445], 
+        #     [0.0, 1882.142659676832, 1106.649560144672], 
+        #     [0.0, 0.0, 1.0]
+        # ])
+
+
+        # zod_seq_000002
+        # self.lidar_to_camera_extrinsics = np.array([
+        #     [0.9991267140413164, 0.03953655015284289, -0.013515564768498207, -0.018528558246263913], 
+        #     [-0.013449114903444907, -0.0019462192473057366, -0.9999076625063704, -0.5869694935026211], 
+        #     [-0.03955920369918571, 0.9992162295682807, -0.001412788035473165, -0.9139157008438608], 
+        #     [0.0, 0.0, 0.0, 1.0]
+        # ])
+        # self.camera_intrinsics = np.array([
+        #     [1857.178102093046, 0.0, 1924.344686403109], 
+        #     [0.0, 1857.178102093046, 1096.887184274005],
+        #     [0.0, 0.0, 1.0]
+        # ])
+
+        #G5
+        #self.distortion_coeffs = np.array([-0.463575, 0.245606, -0.000168, -0.001956])
+        #G6
+        self.distortion_coeffs = np.array([-0.4681, 0.1777, 0.0, 0.0, -0.0290], dtype=np.float32)
         
         # --- 3. 其他參數 ---
         # 3D框Z軸補償值(公尺)
         # 由於 3D 標註框的中心點位於地面，而 LiDAR 座標系原點位於感測器本身 (約離地 1.8 公尺)，
         # 因此需要將標註框向下平移，使其與點雲對齊。
-        self.box3D_z_Correction = -1.8    
+        self.box3D_z_Correction = 0.0
+        # 3D框保留閾值 veh, ped, cyc
+        self.score_threshold = [0.7, 0.5, 0.5]
+
 
         # --- 4. 執行資料載入與預處理 ---
         # 取得所有 .pcd 檔名並排序
@@ -101,7 +136,7 @@ class SceneDataLoader:
         if not self.pcd_files:
             raise FileNotFoundError(f"在 {self.pointcloud_folder} 中找不到任何 .pcd 檔案。")
 
-        self._data_map = self._preprocess_and_map_data() # 執行核心的資料預處理函式
+        self._data_map = self._preprocess_and_map_data()
         self.image_height, self.image_width = self._get_default_image_size()
 
         
@@ -121,6 +156,8 @@ class SceneDataLoader:
         return { 
             'pcd_filename': frame_specific_data.get('pcd_filename'),
             'point_cloud': frame_specific_data.get('point_cloud'),
+            'name': frame_specific_data.get('name', np.array([])),
+            'pred_labels': frame_specific_data.get('pred_labels', np.array([])),
             'boxes_lidar': frame_specific_data.get('boxes_lidar', np.array([])),
             'yaw_pose': frame_specific_data.get('yaw_pose', np.identity(4)),
             'imu_data': frame_specific_data.get('imu_data', np.array([])),
@@ -144,11 +181,42 @@ class SceneDataLoader:
             boxes_data = temp_detection_dict.get(frame_id_int, {}).copy()
             boxes_data['pcd_filename'] = pcd_filename
 
-            original_boxes = np.array(boxes_data.get('boxes_lidar', [])) # 取得 3D 邊界框
-            if original_boxes.size > 0:
-                original_boxes[:, 2] += self.box3D_z_Correction # 進行 Z 軸補償
-                boxes_data['boxes_lidar'] = original_boxes
+            scores = np.array(boxes_data.get('score', []))
+            pred_labels = boxes_data.get('pred_labels', [])
+            if scores.size > 0:
+                safe_mask = []
+                warned_labels = set() # 用來避免重複印出同樣的警告
                 
+                for i in range(len(scores)):
+                    label_idx = int(pred_labels[i]) - 1 # 轉成 0-based index
+                    
+                    # 檢查索引是否在 score_threshold 範圍內
+                    if 0 <= label_idx < len(self.score_threshold):
+                        thresh = self.score_threshold[label_idx]
+                    else:
+                        # 如果超出範圍，給予預設值 (例如 0.5)
+                        thresh = 0.5 
+                        if pred_labels[i] not in warned_labels:
+                            print(f"[Warning] Frame {frame_id}: 發現未知類別 ID {pred_labels[i]}，使用預設閾值 {thresh}")
+                            warned_labels.add(pred_labels[i])
+                    
+                    safe_mask.append(scores[i] >= thresh)
+                
+                score_mask = np.array(safe_mask)
+                
+                if 'name' in boxes_data:
+                    boxes_data['name'] = [n for i, n in enumerate(boxes_data['name']) if score_mask[i]]
+                if 'pred_labels' in boxes_data:
+                    boxes_data['pred_labels'] = [l for i, l in enumerate(boxes_data['pred_labels']) if score_mask[i]]
+                boxes_data['score'] = scores[score_mask].tolist()
+
+                # 篩選
+                if 'boxes_lidar' in boxes_data and len(boxes_data['boxes_lidar']) > 0:
+                    # 篩選
+                    original_boxes = np.array(boxes_data['boxes_lidar'])[score_mask]  
+                    original_boxes[:, 2] += self.box3D_z_Correction
+                    boxes_data['boxes_lidar'] = original_boxes
+
             # pcd
             pcd_path = os.path.join(self.pointcloud_folder, pcd_filename)
             pcd_legacy  = o3d.io.read_point_cloud(pcd_path)

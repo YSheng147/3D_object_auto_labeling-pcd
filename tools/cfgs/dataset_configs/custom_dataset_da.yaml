@@ -1,9 +1,10 @@
 DATASET: 'CustomDataset'
-DATA_PATH: '/home/ys/MS3D/data/custom/2024-07-03/highway_cloudy_day/#00_csd/pointcloud'
+DATA_PATH: '/data/elan/2026-02-03/citystreet_sunny/citystreet_sunny_day_2026-02-03-17-03-09/pointcloud'
 SHIFT_COOR: [0.0, 0.0, 1.8] # change this according to your lidar height above ground
-#POINT_CLOUD_RANGE: [-75.2, -75.2, -2, 75.2, 75.2, 4] #中心
+
+POINT_CLOUD_RANGE: [-75.2, -75.2, -2, 75.2, 75.2, 4] #中心
 #POINT_CLOUD_RANGE: [0, -75.2, -2, 150.4, 75.2, 4] #右方
-POINT_CLOUD_RANGE: [-75.2, 0, -2, 75.2, 150.4, 4] #上方
+#POINT_CLOUD_RANGE: [-75.2, 0, -2, 75.2, 150.4, 4] #上方 elan
 MAX_SWEEPS: 4
 
 DATA_SPLIT: {'train': train, 'test': val}

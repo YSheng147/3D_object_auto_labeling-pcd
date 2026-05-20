@@ -54,6 +54,10 @@ def convert_data_format(dataset_name, dataset, data_dict: dict) -> list:
 
     frame_filename_dict = dataset_frame_filename(dataset) if dataset_name == "CustomDataset" else {}
 
+    # MS3D 推論時點雲有套用 SHIFT_COOR（z 移到地面），輸出標籤還原回感測器座標系
+    shift_coor = np.array(dataset.dataset_cfg.SHIFT_COOR, dtype=np.float32) \
+        if dataset.dataset_cfg.get('SHIFT_COOR', None) else None
+
     for key, value in data_dict.items():
         gt_boxes = value.get('gt_boxes', np.array([]))
 
@@ -85,6 +89,10 @@ def convert_data_format(dataset_name, dataset, data_dict: dict) -> list:
             'frame_id': key,
             'file_name': file_name
         }
+
+        if shift_coor is not None and len(new_frame_dict['boxes_lidar']) > 0:
+            new_frame_dict['boxes_lidar'][:, 0:3] -= shift_coor
+
         converted_list.append(new_frame_dict)
 
     return converted_list
