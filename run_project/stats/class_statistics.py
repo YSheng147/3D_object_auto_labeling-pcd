@@ -7,7 +7,7 @@ from collections import Counter
 # 統計的類別
 CLASSES_TO_COUNT = ["Vehicle", "Pedestrian", "Cyclist"]
 # 分數閾值： [Vehicle, Pedestrian, Cyclist]
-SCORE_THRESHOLD = [0.7, 0.5, 0.5]
+SCORE_THRESHOLD = [0.7, 0.6, 0.5]
 # CSV 欄位順序
 CSV_FIELD_NAMES = ["total_frames"] + CLASSES_TO_COUNT
 

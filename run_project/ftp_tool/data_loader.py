@@ -18,6 +18,9 @@ import open3d as o3d
 import cv2
 from tqdm import tqdm
 
+# VLS128 點雲資料夾可能的名稱，依優先順序排列
+VLS128_FOLDER_NAMES = ['VLS128_pcd', 'VLS128_pcdnpy', 'vls128_pcd', 'vls128_pcdnpy']
+
 class SceneDataLoader:
     """
     資料格式：
@@ -48,11 +51,30 @@ class SceneDataLoader:
         if not os.path.isdir(base_folder):
             raise FileNotFoundError(f"提供的基礎路徑不存在: {base_folder}")
         
-        self.base_folder = base_folder # 儲存基礎路徑
-        self.pointcloud_folder = os.path.join(self.base_folder, "VLS128_pcd")    # 點雲 路徑
-        self.imu_folder = os.path.join(self.base_folder, "imu")                     # IMU 路徑
-        self.image_folder = os.path.join(self.base_folder, "images")                 # 圖片 路徑
-        self.box3D_file = os.path.join(self.base_folder, "3d_label_v3.pkl")          # 3D框 路徑
+        self.base_folder = base_folder
+
+        # 點雲：從 VLS128_FOLDER_NAMES 中找第一個存在的資料夾
+        self.pointcloud_folder = self._find_first_existing_folder(
+            [os.path.join(self.base_folder, name) for name in VLS128_FOLDER_NAMES]
+        )
+        if self.pointcloud_folder is None:
+            raise FileNotFoundError(f"找不到 VLS128 點雲資料夾，已嘗試: {VLS128_FOLDER_NAMES}")
+
+        # IMU：優先 paired/imu，找不到再找 imu/
+        self.imu_folder = self._find_first_existing_folder([
+            os.path.join(self.base_folder, "paired", "imu"),
+            os.path.join(self.base_folder, "imu"),
+        ])
+
+        # 影像：優先 paired/images/main 或 paired/image/main，找不到再找 images/
+        self.image_folder = self._find_first_existing_folder([
+            os.path.join(self.base_folder, "paired", "images", "main"),
+            os.path.join(self.base_folder, "paired", "image", "main"),
+            os.path.join(self.base_folder, "images", "main"),
+            os.path.join(self.base_folder, "image", "main"),
+        ])
+
+        self.box3D_file = os.path.join(self.base_folder, "3d_label_v2.pkl")
 
         # 可能檔名設定
         self.imu_possible_names = ["id.txt", "id_imu.txt"]
@@ -75,18 +97,30 @@ class SceneDataLoader:
 
 
         #G6
+        # self.lidar_to_camera_extrinsics = np.array([
+        #     [-0.00693070, -0.99997562,  0.00083871,  0.000000],
+        #     [-0.12013684,  0.000000,   -0.99275732, -0.200000],
+        #     [ 0.99273312, -0.00698126, -0.12013391,  0.000000],
+        #     [ 0.0,         0.0,         0.0,         1.0     ]
+        # ], dtype=np.float32)
+        # self.camera_intrinsics = np.array([
+        #     [1635.6,    0.0,    1288.73],
+        #     [   0.0, 1644.0,     739.87],
+        #     [   0.0,    0.0,       1.0]
+        # ], dtype=np.float32)
+
+        #G6_0507
         self.lidar_to_camera_extrinsics = np.array([
-            [-0.00693070, -0.99997562,  0.00083871,  0.000000],
-            [-0.12013684,  0.000000,   -0.99275732, -0.200000],
-            [ 0.99273312, -0.00698126, -0.12013391,  0.000000],
-            [ 0.0,         0.0,         0.0,         1.0     ]
+            [-0.0032114272471517324, -0.9999144077301025,  0.01268315501511097, -0.05869999380111694],
+            [-0.1252356618642807,    -0.012181208468973637, -0.9920521974563599, -0.18290000298023223],
+            [ 0.9921218156814575,    -0.004774285014718771, -0.12518581748008728, -0.024499993801116934],
+            [ 0.0,                    0.0,                    0.0,                   1.0]
         ], dtype=np.float32)
         self.camera_intrinsics = np.array([
-            [2453.4,    0.0, 1933.1],
-            [   0.0, 2466.0, 1109.8],
-            [   0.0,    0.0,    1.0]
+            [1627.79941, 0.0, 1288.66688],
+            [0.0, 1630.49737, 737.04906],
+            [0.0, 0.0, 1.0]
         ], dtype=np.float32)
-        
 
         # zod_seq_000000
         # self.lidar_to_camera_extrinsics = np.array([
@@ -118,7 +152,7 @@ class SceneDataLoader:
         #G5
         #self.distortion_coeffs = np.array([-0.463575, 0.245606, -0.000168, -0.001956])
         #G6
-        self.distortion_coeffs = np.array([-0.4681, 0.1777, 0.0, 0.0, -0.0290], dtype=np.float32)
+        self.distortion_coeffs = np.array([-0.334873117, 0.132072823, -0.030582341, 0.002529772], dtype=np.float32)
         
         # --- 3. 其他參數 ---
         # 3D框Z軸補償值(公尺)
@@ -233,8 +267,11 @@ class SceneDataLoader:
                     if len(first_data) == 6:
                         # 格式 (1): orientation_x, orientation_y, orientation_z, angular_velocity_x, angular_velocity_y, angular_velocity_z
                         yaw = first_data[2]
+                    elif len(first_data) == 10:
+                        # 格式 (2): timestamp,roll,pitch,yaw,angular_velocity_x,angular_velocity_y,angular_velocity_z,linear_acceleration_x,linear_acceleration_y,linear_acceleration_z
+                        yaw = np.radians(first_data[3])
                     elif len(first_data) == 11:
-                        # 格式 (2): timestamp_ns,orientation_w,orientation_x,orientation_y,orientation_z,angular_velocity_x,angular_velocity_y,angular_velocity_z,linear_acceleration_x,linear_acceleration_y,linear_acceleration_z
+                        # 格式 (3): timestamp_ns,orientation_w,orientation_x,orientation_y,orientation_z,angular_velocity_x,angular_velocity_y,angular_velocity_z,linear_acceleration_x,linear_acceleration_y,linear_acceleration_z
                         yaw = first_data[4]
                     else:
                         print(f"⚠️ 無法解析此行資料: {first_data}")
@@ -256,6 +293,13 @@ class SceneDataLoader:
 
             data_map[pcd_filename] = boxes_data
         return data_map
+
+    def _find_first_existing_folder(self, candidates):
+        """回傳 candidates 中第一個存在的目錄路徑，全不存在則回傳 None。"""
+        for path in candidates:
+            if os.path.isdir(path):
+                return path
+        return None
 
     def _find_file(self, folder, id , possible_names):
         """
@@ -307,9 +351,10 @@ class SceneDataLoader:
 
                 for line in lines:
                     parts = [float(x) for x in line.strip().split(',')]
-                    if len(parts) == 6 or len(parts) == 11:
+                    if len(parts) == 6 or len(parts) == 10 or len(parts) == 11:
                         # 格式 (1): orientation_x, orientation_y, orientation_z, angular_velocity_x, angular_velocity_y, angular_velocity_z
-                        # 格式 (2): timestamp_ns,orientation_w,orientation_x,orientation_y,orientation_z,angular_velocity_x,angular_velocity_y,angular_velocity_z,linear_acceleration_x,linear_acceleration_y,linear_acceleration_z
+                        # 格式 (2): timestamp,roll,pitch,yaw,angular_velocity_x,angular_velocity_y,angular_velocity_z,linear_acceleration_x,linear_acceleration_y,linear_acceleration_z
+                        # 格式 (3): timestamp_ns,orientation_w,orientation_x,orientation_y,orientation_z,angular_velocity_x,angular_velocity_y,angular_velocity_z,linear_acceleration_x,linear_acceleration_y,linear_acceleration_z
                         imu_data.append(parts)
                     else:
                         print(f"⚠️ 無法解析此行資料: {line.strip()}")  # 當資料格式不符時，跳過該行

@@ -123,14 +123,18 @@ def update_ps(dataset, ps_dict, tracks_veh_all, tracks_veh_static, tracks_ped=No
         final_ps_dict[frame_id]['num_pts'] = num_pts[num_pts > min_num_pts] 
         final_ps_dict[frame_id]['memory_counter'] = np.zeros(final_ps_dict[frame_id]['gt_boxes'].shape[0])
 
-    # Remove boxes at the ego-vehicle position due to lidar hitting the roof/racks
+    # Remove ego-vehicle false detections (LiDAR rack misdetected as Vehicle)
+    # LiDAR mounted above front-seat center; ego footprint: x in (-4, 2), |y| < 1.0
     for frame_id in final_ps_dict.keys():
         boxes = final_ps_dict[frame_id]['gt_boxes']
-        mask = ((np.abs(boxes[:, 0]) < 1.0) & (np.abs(boxes[:,1]) < 1.0))
-        final_ps_dict[frame_id]['gt_boxes'] = boxes[~mask]
-        final_ps_dict[frame_id]['num_pts'] = final_ps_dict[frame_id]['num_pts'][~mask]
-        final_ps_dict[frame_id]['memory_counter'] = final_ps_dict[frame_id]['memory_counter'][~mask]        
-        
+        is_vehicle = np.abs(boxes[:, 7]) == 1
+        in_ego_zone = ((boxes[:, 0] > -4.0) & (boxes[:, 0] < 2.0) & (np.abs(boxes[:, 1]) < 1.0))
+        ego_mask = is_vehicle & in_ego_zone
+        keep_mask = ~ego_mask
+        final_ps_dict[frame_id]['gt_boxes'] = boxes[keep_mask]
+        final_ps_dict[frame_id]['num_pts'] = final_ps_dict[frame_id]['num_pts'][keep_mask]
+        final_ps_dict[frame_id]['memory_counter'] = final_ps_dict[frame_id]['memory_counter'][keep_mask]
+
     return final_ps_dict
 
 def refine_veh_labels(dataset, frame_ids,

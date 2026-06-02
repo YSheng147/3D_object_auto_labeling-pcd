@@ -363,9 +363,10 @@ def render_video_sequence(state, output_filename, framerate):
         'ffmpeg',
         '-r', str(framerate),
         '-i', f'{temp_image_folder}/frame_%05d.png',
-        '-c:v', 'libx264',
+        '-c:v', 'mpeg4',
+        '-q:v', '3',
         '-pix_fmt', 'yuv420p',
-        '-y', # 覆蓋已存在的檔案
+        '-y',
         output_filename
     ]
     
@@ -475,6 +476,8 @@ def draw_projection_on_image(image, points_2d, corners_2d, show_points=True, box
         ]
         
         for box_corners in corners_2d:
+            if not np.all(np.isfinite(box_corners)):
+                continue
             pts = box_corners.astype(np.int32)
             
             # 畫 3D 框
@@ -544,37 +547,41 @@ def render_2d_video_sequence(state, output_filename, framerate, show_points=True
         if canvas is None or canvas.size == 0:
             print(f"\n 警告：幀 {i} 找不到對應照片，使用黑背景代替。")
             canvas = np.zeros((height, width, 3), dtype=np.uint8)
-        # b. 去畸變
-        # 計算新的、最佳化的相機內參矩陣
-        new_camera_intrinsics, roi = cv2.getOptimalNewCameraMatrix(K, D, (width, height), 0, (width, height))
-        undistorted_canvas = cv2.undistort(canvas, K, D, None, new_camera_intrinsics)
-        
-        # c. 執行座標轉換和投影
+
+        # b. 座標轉換到相機系
         points_in_camera = transform_points(np.asarray(pcd_legacy.points), state.lidar_to_camera_extrinsics)
         corners_in_camera = transform_boxes_to_corners(original_boxes, state.lidar_to_camera_extrinsics)
-        projected_points, _ = project_points_to_image(points_in_camera, K)
 
-        projected_corners = np.zeros((0, 8, 2)) # 8個角點的2D投影
+        # c. 含畸變投影（直接對應原始影像，不去畸變）
+        rvec, tvec = np.zeros(3, dtype=np.float32), np.zeros(3, dtype=np.float32)
 
+        valid_pts_mask = points_in_camera[:, 2] > 0
+        points_visible = points_in_camera[valid_pts_mask]
+        if points_visible.shape[0] > 0:
+            proj, _ = cv2.projectPoints(points_visible.reshape(-1, 1, 3).astype(np.float32), rvec, tvec, K, D)
+            projected_points = proj.reshape(-1, 2)
+        else:
+            projected_points = np.zeros((0, 2))
+
+        projected_corners = np.zeros((0, 8, 2))
         if corners_in_camera.shape[0] > 0:
             valid_box_mask = (corners_in_camera[:, :, 2] > 0).all(axis=1)
             valid_3d_corners = corners_in_camera[valid_box_mask]
             if valid_3d_corners.shape[0] > 0:
-                projected_valid_corners, _ = project_points_to_image(valid_3d_corners.reshape(-1, 3), K)
-                projected_corners = projected_valid_corners.reshape(-1, 8, 2)
+                proj_c, _ = cv2.projectPoints(valid_3d_corners.reshape(-1, 1, 3).astype(np.float32), rvec, tvec, K, D)
+                projected_corners = proj_c.reshape(-1, 8, 2)
 
         # d. 讀取對應的 YOLO 2D 標籤
         yolo_boxes = None
         if yolo_label_folder:
             pcd_filename = frame_data.get('pcd_filename', '')
-            # 取點雲檔名的 basename（不含副檔名）作為 YOLO 標籤檔名
             base_name = os.path.splitext(os.path.basename(pcd_filename))[0] if pcd_filename else f"{i:06d}"
             yolo_label_path = os.path.join(yolo_label_folder, f"{base_name}.txt")
-            cur_h, cur_w = undistorted_canvas.shape[:2]
+            cur_h, cur_w = canvas.shape[:2]
             yolo_boxes = load_yolo_boxes(yolo_label_path, cur_w, cur_h)
 
-        # e. 在影像上繪圖並儲存
-        output_frame = draw_projection_on_image(undistorted_canvas, projected_points, projected_corners,
+        # e. 在原始影像上繪圖並儲存
+        output_frame = draw_projection_on_image(canvas, projected_points, projected_corners,
                                                 show_points=show_points, box_mode=box_mode,
                                                 yolo_boxes=yolo_boxes)
         image_path = os.path.join(temp_image_folder, f"frame_{i:05d}.png")
@@ -588,10 +595,11 @@ def render_2d_video_sequence(state, output_filename, framerate, show_points=True
         'ffmpeg',
         '-r', str(framerate),
         '-i', f'{temp_image_folder}/frame_%05d.png',
-        '-c:v', 'libx264',
+        '-c:v', 'mpeg4',
+        '-q:v', '3',
         '-pix_fmt', 'yuv420p',
-        '-y', 
-        output_filename 
+        '-y',
+        output_filename
     ]
     
     try:
